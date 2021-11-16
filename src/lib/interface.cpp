@@ -119,7 +119,6 @@ struct NetConfig {
 
 bool preProcess(const InputType& input, const TensorVec& inTensors, ContextPtr ctx){
     if(input.num == 0){
-        BMLOG(FATAL, "input.num is ZERO");
         return false;
     }
     BM_ASSERT_EQ(input.num, inTensors.size());
