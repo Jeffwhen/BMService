@@ -88,6 +88,21 @@ cp ssd-mobilenet_bmnett_test_fp32.prototxt ssd-mobilenet_bmnett_calib_fp32.proto
 Edit `ssd-mobilenet_bmnett_calib_fp32.prototxt`'s input layer as following.
 
 ```
+layer {
+  name: "normalized_input_image_tensor"
+  type: "Data"
+  top: "normalized_input_image_tensor"
+  data_param {
+    source: "/path/to/coco_calib_300x300.lmdb"
+    batch_size: 1
+    backend: LMDB
+  }
+}
+```
+
+Quantize and build bmodel.
+
+```
 calibration_use_pb quantize -model ./ssd-mobilenet_bmnett_calib_fp32.prototxt -weights ./ssd-mobilenet_bmnett.fp32umodel -iterations 500
 bmnetu -model ./ssd-mobilenet_bmnett_deploy_int8_unique_top.prototxt -weight ./ssd-mobilenet_bmnett.int8umodel -net_name ssd-mobilenet-int8 -target BM1684 -input_as_fp32 normalized_input_image_tensor -output_as_fp32 raw_outputs/class_predictions,raw_outputs/box_encodings
 ```

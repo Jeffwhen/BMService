@@ -9,3 +9,5 @@ thirdparty
 *.swp
 python/bmservice/lib
 *.autosave
+preprocessed
+*output*
