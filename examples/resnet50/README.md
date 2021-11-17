@@ -11,15 +11,15 @@ Download resnet50-v1.5/PyTorch from [MLPerf inference repo](https://github.com/m
 python3 parse_net.py resnet50-19c8e357.pth # Compile fp32 bmodel and UFW models for calibration
 ```
 
+Output bmodel resides in `compilation` directory.
+
 ### Calibration
 
 ```
 protoc ./caffe.proto --python_out=./ # Gen protobuf python
 python3 calib_lmdb.py /workspace/ILSVRC2012_val/ ./cal_image_list_option_1.txt ./resnet50_calib.lmdb # Generate calib lmdb dataset
-cp torch-resnet50-v1_bmnetp_test_fp32.prototxt torch-resnet50-v1_bmnetp_calib_fp32.prototxt
+cp torch-resnet50-v1_bmnetp_test_fp32.prototxt torch-resnet50-v1_bmnetp_calib_fp32.prototxt # Copy prototxt to edit
 ```
-
-Output bmodel resides in `compilation` directory.
 
 Now edit `torch-resnet50-v1_bmnetp_calib_fp32.prototxt`'s input layer as following.
 
@@ -50,7 +50,7 @@ layer {
 Quantize and build bmodel.
 
 ```
-calibration_use_pb quantize -model ./torch-resnet50-v1_bmnetp_calib_fp32.prototxt -weights ./torch-resnet50-v1_bmnetp.fp32umodel
+calibration_use_pb quantize -model ./torch-resnet50-v1_bmnetp_calib_fp32.prototxt -weights ./torch-resnet50-v1_bmnetp.fp32umodel -iterations 500
 bmnetu -model ./torch-resnet50-v1_bmnetp_deploy_int8_unique_top.prototxt -weight ./torch-resnet50-v1_bmnetp.int8umodel -input_as_fp32 input.1 -output_as_fp32 45
 ```
 
