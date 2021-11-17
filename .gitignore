@@ -9,3 +9,4 @@ thirdparty
 *.swp
 python/bmservice/lib
 *.autosave
+.DS_Store
