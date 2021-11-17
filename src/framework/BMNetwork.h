@@ -78,6 +78,7 @@ public:
 
     ~BMNetwork() { }
     size_t getBatchSize(){ return batchSize; }
+    const bm_net_info_t *getNetInfo() const { return m_netinfo; }
 
     TensorVec createOutputTensors();
     TensorVec createInputTensors();
