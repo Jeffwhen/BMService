@@ -156,7 +156,7 @@ size_t BMTensor::get_dtype_len() const {
         return 4;
     } else if(t == BM_UINT16 || t==BM_INT16 || t==BM_FLOAT16){
         return 2;
-    } else if(t == BM_UINT8 || t == BM_UINT8){
+    } else if(t == BM_UINT8 || t == BM_INT8){
         return 1;
     } else {
         BMLOG(FATAL, "Not support dtype=%d", t);
