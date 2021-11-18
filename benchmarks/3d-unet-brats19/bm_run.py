@@ -23,16 +23,17 @@ import argparse
 import mlperf_loadgen as lg
 import subprocess
 
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--backend",
-                        choices=["pytorch", "onnxruntime", "tf", "ov", "bmservice"],
-                        default="bmservice",
+                        choices=["pytorch", "onnxruntime", "tf", "ov", "bm"],
+                        default="bm",
                         help="Backend")
     parser.add_argument(
         "--scenario",
         choices=["SingleStream", "Offline", "Server", "MultiStream"],
-        default="Offline",
+        default="SingleStream",
         help="Scenario")
     parser.add_argument("--accuracy",
                         action="store_true",
@@ -54,8 +55,9 @@ def get_args():
                         help="path to preprocessed data")
     parser.add_argument("--performance_count",
                         type=int,
-                        default=100,
+                        default=16,
                         help="performance count")
+    parser.add_argument("--batch_size", type=int, default=1, help="batch size of the model")
     args = parser.parse_args()
     return args
 
@@ -70,10 +72,14 @@ scenario_map = {
 
 def main():
     args = get_args()
-    vinfo = sys.version_info
-    python_bin = "python{}.{}".format(vinfo.major, vinfo.minor)
 
-    if args.backend == "pytorch":
+    if args.backend == "bm":
+        if args.accuracy:
+            args.batch_size = 1
+        from bm_SUT import get_bm_sut
+        sut = get_bm_sut(args.model, args.preprocessed_data_dir,
+                         args.performance_count, args.batch_size)
+    elif args.backend == "pytorch":
         from pytorch_SUT import get_pytorch_sut
         sut = get_pytorch_sut(args.model_dir, args.preprocessed_data_dir,
                               args.performance_count)
@@ -89,10 +95,6 @@ def main():
         from ov_SUT import get_ov_sut
         sut = get_ov_sut(args.model, args.preprocessed_data_dir,
                          args.performance_count)
-    elif args.backend == "bmservice":
-        from bmservice_SUT import get_bmservice_sut
-        sut = get_bmservice_sut(args.model, args.preprocessed_data_dir,
-                         args.performance_count)
     else:
         raise ValueError("Unknown backend: {:}".format(args.backend))
 
@@ -100,6 +102,8 @@ def main():
     settings.scenario = scenario_map[args.scenario]
     settings.FromConfig(args.mlperf_conf, "3d-unet", args.scenario)
     settings.FromConfig(args.user_conf, "3d-unet", args.scenario)
+    settings.min_query_count = 10
+    settings.min_duration_ms = 10000
 
     if args.accuracy:
         settings.mode = lg.TestMode.AccuracyOnly
@@ -120,7 +124,7 @@ def main():
 
     if args.accuracy:
         print("Running accuracy script...")
-        cmd = python_bin + " accuracy-brats.py" + " --output_dtype float32"
+        cmd = "python3 accuracy-brats.py"
         subprocess.check_call(cmd, shell=True)
 
     print("Done!")
