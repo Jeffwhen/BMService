@@ -11,3 +11,5 @@ python/bmservice/lib
 *.autosave
 preprocessed
 *output*
+.DS_Store
+.idea/
