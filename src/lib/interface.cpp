@@ -215,10 +215,6 @@ inline float sigmoid(float v)
 }
 
 bool postProcess(const InputType& input, const TensorVec& outTensors, OutputType& postOut, ContextPtr ctx){
-    if(input.num == 0) {
-        postOut.num = 0;
-        throw "finished"; // to stop current pipeline
-    }
     auto pCfg = static_cast<NetConfig *>(ctx->getConfigData());
     postOut.id = input.id;
     if(input.release_inside){
@@ -458,7 +454,7 @@ unsigned int runner_start(const char *bmodel) {
 
 void runner_stop(unsigned int runner_id) {
     if(!globalRunnerInfos.count(runner_id)) return;
-    globalRunnerInfos[runner_id]->runner.stop();
+    globalRunnerInfos[runner_id]->runner.join();
     globalRunnerInfos.erase(runner_id);
 }
 
@@ -505,15 +501,12 @@ static tensor_data_t *__runner_get_output(unsigned runner_id, unsigned int *task
     auto& info = globalRunnerInfos[runner_id];
     OutputType output;
     std::shared_ptr<ProcessStatus> status;
-    bool ok = false;
-    do{
-       ok = info->runner.pop(output, status);
-       if(ok || is_async){
-           break;
-       } else {
-           std::this_thread::yield();
-       }
-    } while(1);
+    bool ok;
+    if (is_async)
+        ok = info->runner.pop(output, status);
+    else
+        ok = info->runner.waitAndPop(output, status);
+
     if(!ok) return nullptr;
 
     *task_id = output.id;
@@ -545,6 +538,16 @@ int runner_empty(unsigned int runner_id)
 {
     if(!globalRunnerInfos.count(runner_id)) return true;
     return globalRunnerInfos[runner_id]->runner.empty();
+}
+
+void runner_join(unsigned int runner_id)
+{
+    if(!globalRunnerInfos.count(runner_id)) {
+        BMLOG(ERROR, "invalid runner_id %d", runner_id);
+        return;
+    }
+    auto& info = globalRunnerInfos[runner_id];
+    info->runner.join();
 }
 
 void runner_use_devices(const unsigned *device_ids, unsigned num)
@@ -586,5 +589,17 @@ blob_info_t *get_input_info(unsigned runner_id, unsigned *num)
 void release_input_info(unsigned runner_id, blob_info_t *info)
 {
     delete[] info;
+}
+
+uint32_t *get_runner_durations(unsigned runner_id, unsigned *num)
+{
+    *num = 0;
+    if(!globalRunnerInfos.count(runner_id)) return nullptr;
+    return globalRunnerInfos[runner_id]->status.get_durations(num);
+}
+
+void release_unsigned_pointer(unsigned *data)
+{
+    delete[] data;
 }
 
