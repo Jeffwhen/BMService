@@ -33,6 +33,7 @@ struct InputType {
     unsigned int id = 0;
     unsigned num = 0;
     tensor_data_t* tensors = nullptr;
+    std::shared_ptr<ProcessStatus> status;
 };
 
 struct OutputType {
@@ -464,10 +465,21 @@ void runner_show_status(unsigned int runner_id)
     globalRunnerInfos[runner_id]->status.show();
 }
 
-unsigned int runner_put_input(unsigned runner_id, unsigned int input_num, const tensor_data_t *input_tensors, int need_copy)
+ProcessStatus *make_process_status()
+{
+    return new ProcessStatus;
+}
+
+unsigned int runner_put_input(
+    unsigned runner_id, unsigned int input_num,
+    const tensor_data_t *input_tensors, int need_copy,
+    ProcessStatus *status)
 {
     if(!globalRunnerInfos.count(runner_id)) return -1;
     InputType input;
+    input.status = status ? std::shared_ptr<ProcessStatus>(status) :
+        std::make_shared<ProcessStatus>();
+    input.status->start();
     input.id = globalRunnerInfos[runner_id]->nextId();
     input.release_inside = need_copy;
     input.num = input_num;
@@ -486,6 +498,7 @@ unsigned int runner_put_input(unsigned runner_id, unsigned int input_num, const 
     } else {
         input.tensors = nullptr;
     }
+    input.status->end();
     globalRunnerInfos[runner_id]->runner.push(input);
     return input.id;
 }

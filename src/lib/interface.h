@@ -33,7 +33,8 @@ int runner_empty(unsigned int runner_id);
 int runner_all_stopped(size_t runner_id);
 void runner_show_status(unsigned int runner_id);
 
-unsigned int runner_put_input(unsigned runner_id, unsigned int input_num, const tensor_data_t* input_tensors, int need_copy);
+bm::ProcessStatus *make_process_status();
+unsigned int runner_put_input(unsigned runner_id, unsigned int input_num, const tensor_data_t* input_tensors, int need_copy, bm::ProcessStatus *status);
 tensor_data_t *runner_get_output(unsigned runner_id, unsigned int *task_id, unsigned int *output_num, unsigned int *is_valid);
 tensor_data_t *runner_try_to_get_output(unsigned runner_id, unsigned int *task_id, unsigned int *output_num, unsigned int *is_valid);
 unsigned int runner_release_output(unsigned int output_num, const tensor_data_t *output_data);

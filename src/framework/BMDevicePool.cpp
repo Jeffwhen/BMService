@@ -3,10 +3,9 @@
 
 namespace bm {
 
-const char* __phaseMap[]={
-    "PRE-PROCESS",
-    "FOWARD",
-    "POST-PROCESS"
+static std::map<int, std::vector<const char*>> __phaseMap= {
+    {3, { "PRE-PROCESS", "FOWARD", "POST-PROCESS" }},
+    {4, { "INPUT", "PRE-PROCESS", "FOWARD", "POST-PROCESS" }},
 };
 
 void *BMDeviceContext::getConfigData() const
@@ -158,9 +157,10 @@ void ProcessStatInfo::show() {
         BMLOG(INFO, "  -> device #%d processes %d samples", p.first, p.second);
     }
     BMLOG(INFO, "Average per device:");
+    auto phaseMap = __phaseMap[durations.size()];
     for(size_t i=0; i<durations.size(); i++){
         BMLOG(INFO, "  -> %s total_time=%gms, avg_time=%gms",
-              __phaseMap[i],
+              phaseMap[i],
               durations[i]/1000.0, durations[i]/1000.0/numSamples);
     }
 }
@@ -182,11 +182,12 @@ void ProcessStatus::end(){
 
 void ProcessStatus::show() {
     BMLOG(INFO, "device_id=%d, valid=%d, total=%dus", deviceId, valid, totalDuration());
+    auto phaseMap = __phaseMap[starts.size()];
     for(size_t i=0; i<starts.size(); i++){
         auto startStr = steadyToString(starts[i]);
         auto endStr = steadyToString(ends[i]);
         BMLOG(INFO, "  -> %s: duration=%dus",
-              __phaseMap[i],
+              phaseMap[i],
               usBetween(starts[i], ends[i]),
               startStr.c_str(), endStr.c_str());
     }

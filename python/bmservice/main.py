@@ -97,16 +97,21 @@ class BMService:
     def __del__(self):
         self.__lib.runner_stop(self.runner_id)
 
-    def put(self, *inputs):
+    def make_status(self):
+        return self.__lib.make_process_status()
+
+    def put(self, *inputs, status=None):
         if not inputs:
             self.__lib.runner_join(self.runner_id)
             return
+        if not status:
+            status = self.__lib.make_process_status()
         input_num = ct.c_int(len(inputs))
         bm_inputs = (BMTensor*len(inputs))()
         inputs = [i if i.data.c_contiguous else np.ascontiguousarray(i) for i in inputs]
         for i in range(len(inputs)):
             bm_inputs[i].from_numpy(inputs[i])
-        task_id = self.__lib.runner_put_input(self.runner_id, input_num, bm_inputs, 1)
+        task_id = self.__lib.runner_put_input(self.runner_id, input_num, bm_inputs, 1, status)
         return task_id
         
     def get(self):

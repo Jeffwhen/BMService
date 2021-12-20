@@ -13,7 +13,6 @@
 
 namespace bm {
 
-extern const char* __phaseMap[];
 class BMDeviceContext {
 
 private:
@@ -260,8 +259,23 @@ public:
         return res;
     }
 
+    struct general_ {};
+    struct special_ : general_ {};
+    template<typename T> struct int_ { typedef int type; };
+    template<
+        typename T,
+        typename int_<decltype(T::status)>::type = 0>
+    std::shared_ptr<ProcessStatus> get_status(const T &in, special_)
+    {
+        return in.status;
+    }
+    template<typename T>
+    std::shared_ptr<ProcessStatus> get_status(const T &in, general_)
+    {
+        return std::make_shared<ProcessStatus>();
+    }
     bool preProcess(const InType& in, _PreOutType& out, ContextPtr ctx, PreProcessFunc preCoreFunc) {
-        out.status = std::make_shared<ProcessStatus>();
+        out.status = get_status(in, special_()); // get status if InType has it
         out.status->deviceId = ctx->deviceId;
         out.status->start();
         out.in = in;
