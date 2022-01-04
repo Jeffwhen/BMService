@@ -50,7 +50,6 @@ SUPPORTED_PROFILES = {
     "resnet50": {
         "dataset": "imagenet_pytorch",
         "cache": 0,
-        "max-batchsize": 32,
         "model-name": "resnet50"
     }
 }
@@ -75,7 +74,6 @@ def get_args():
     parser.add_argument("--profile", choices=SUPPORTED_PROFILES.keys(), help="standard profiles")
     parser.add_argument("--scenario", default="SingleStream",
                         help="mlperf benchmark scenario, one of " + str(list(SCENARIO_MAP.keys())))
-    parser.add_argument("--max-batchsize", type=int, help="max batch size in a single inference")
     parser.add_argument("--model", required=True, help="model file")
     parser.add_argument("--output", default="output", help="test results")
     parser.add_argument("--inputs", help="model inputs")
@@ -141,15 +139,16 @@ class Item:
         return zip(self.query_id, self.content_id, self.img, self.label)
 
 class RunnerBase:
-    def __init__(self, model, ds, threads, post_proc=None, max_batchsize=128):
+    def __init__(self, model, ds, threads, post_proc=None):
         self.take_accuracy = False
         self.ds = ds
         self.model = model
-        self.service = bmservice.BMService(model)
+        self.service = bmservice.BMService(model, devices=[0])
         self.post_process = post_proc
         self.threads = threads
         self.take_accuracy = False
-        self.max_batchsize = max_batchsize
+        info = self.service.get_input_info()
+        self.max_batchsize = next(v for v in info.values())[0]
         self.result_timing = []
 
     def handle_tasks(self, tasks_queue):
@@ -168,7 +167,9 @@ class RunnerBase:
             processed_results = self.post_process(results, qitem.content_id, qitem.label, self.result_dict)
             if self.take_accuracy:
                 self.post_process.add_results(processed_results)
-                self.result_timing.append(time.time() - qitem.start)
+            took = time.time() - qitem.start
+            for idx in qitem.query_id:
+                self.result_timing.append(took)
         except Exception as ex:  # pylint: disable=broad-except
             src = [self.ds.get_item_loc(i) for i in qitem.content_id]
             log.error("thread: failed on contentid=%s, %s", src, ex)
@@ -208,45 +209,68 @@ class RunnerBase:
     def finish(self):
         pass
 
-
 class QueueRunner(RunnerBase):
-    def __init__(self, model, ds, threads, post_proc=None, max_batchsize=128):
-        super().__init__(model, ds, threads, post_proc, max_batchsize)
-        self.workers = []
+    def __init__(self, model, ds, threads, post_proc=None):
+        super().__init__(model, ds, threads, post_proc)
+        self.query_samples = []
         self.result_dict = {}
         self.task_map = {}
+        self.running = False
+        self.cond = threading.Condition()
 
+    def start_run(self, result_dict, take_accuracy):
+        super().start_run(result_dict, take_accuracy)
         self.running = True
+        self.put_worker = threading.Thread(target=self.put_samples)
         self.worker = threading.Thread(target=self.handle_tasks)
+        self.put_worker.start()
         self.worker.start()
+
+    def put_samples(self):
+        while self.running:
+            with self.cond:
+                while not self.query_samples:
+                    if not self.running:
+                        break
+                    self.cond.wait()
+                self.put(self.query_samples)
 
     def handle_tasks(self):
         """Worker thread."""
         while self.running:
-            task_id, results, valid = self.service.try_get()
-            if task_id == 0: # TODO break cond
-                time.sleep(0.0001)
-                continue
+            task_id, results, valid = self.service.get()
+            if task_id == 0:
+                break
             qitem = self.task_map.pop(task_id)
             self.process_result(qitem, task_id, results, valid)
 
     def enqueue(self, query_samples):
+        with self.cond:
+            self.query_samples += query_samples
+            self.cond.notify()
+
+    def put(self, query_samples):
         idx = [q.index for q in query_samples]
         query_id = [q.id for q in query_samples]
         if len(query_samples) < self.max_batchsize:
             data, label = self.ds.get_samples(idx)
-            self.tasks.put(Item(query_id, idx, data, label))
+            task_id = self.service.put(data)
+            self.task_map[task_id] = Item(query_id, idx, data, label)
         else:
             bs = self.max_batchsize
             for i in range(0, len(idx), bs):
                 ie = i + bs
                 data, label = self.ds.get_samples(idx[i:ie])
-                self.tasks.put(Item(query_id[i:ie], idx[i:ie], data, label))
+                task_id = self.service.put(data)
+                self.task_map[task_id] = Item(query_id[i:ie], idx[i:ie], data, label)
 
     def finish(self):
-        self.running = False
-        worker.join()
-
+        with self.cond:
+            self.running = False
+            self.cond.notify()
+        self.put_worker.join()
+        self.service.put()
+        self.worker.join()
 
 def add_results(final_results, name, result_dict, result_list, took, show_accuracy=False):
     percentiles = [50., 80., 90., 95., 99., 99.9]
@@ -342,10 +366,10 @@ def main():
         lg.TestScenario.Server: QueueRunner,
         lg.TestScenario.Offline: QueueRunner
     }
-    runner = runner_map[scenario](args.model, ds, args.threads, post_proc=post_proc, max_batchsize=args.max_batchsize)
+    runner = runner_map[scenario](args.model, ds, args.threads, post_proc=post_proc)
 
     # warmup
-    sample_ids = [9]
+    sample_ids = [9] * runner.max_batchsize
     ds.load_query_samples(sample_ids)
     for _ in range(5):
         img, _ = ds.get_samples(sample_ids)
@@ -361,7 +385,7 @@ def main():
         #print(results)
         #return
     ds.unload_query_samples(None)
-    log.info('Warnup ok')
+    log.info('Warmup ok')
 
     def issue_queries(query_samples):
         runner.enqueue(query_samples)
