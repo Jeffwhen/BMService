@@ -143,7 +143,7 @@ class RunnerBase:
         self.take_accuracy = False
         self.ds = ds
         self.model = model
-        self.service = bmservice.BMService(model, devices=[0])
+        self.service = bmservice.BMService(model)
         self.post_process = post_proc
         self.threads = threads
         self.take_accuracy = False
@@ -231,9 +231,10 @@ class QueueRunner(RunnerBase):
             with self.cond:
                 while not self.query_samples:
                     if not self.running:
-                        break
+                        return
                     self.cond.wait()
                 self.put(self.query_samples)
+                self.query_samples.clear()
 
     def handle_tasks(self):
         """Worker thread."""
