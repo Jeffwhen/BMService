@@ -105,7 +105,7 @@ class BMService:
             self.__lib.runner_join(self.runner_id)
             return
         if not status:
-            status = self.__lib.make_process_status()
+            status = 0
         input_num = ct.c_int(len(inputs))
         bm_inputs = (BMTensor*len(inputs))()
         inputs = [i if i.data.c_contiguous else np.ascontiguousarray(i) for i in inputs]

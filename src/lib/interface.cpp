@@ -467,7 +467,9 @@ void runner_show_status(unsigned int runner_id)
 
 ProcessStatus *make_process_status()
 {
-    return new ProcessStatus;
+    auto r = new ProcessStatus;
+    r->start();
+    return r;
 }
 
 unsigned int runner_put_input(
@@ -477,9 +479,13 @@ unsigned int runner_put_input(
 {
     if(!globalRunnerInfos.count(runner_id)) return -1;
     InputType input;
-    input.status = status ? std::shared_ptr<ProcessStatus>(status) :
-        std::make_shared<ProcessStatus>();
-    input.status->start();
+    if (status)
+    {
+        input.status = std::shared_ptr<ProcessStatus>(status);
+    } else {
+        input.status = std::make_shared<ProcessStatus>();
+        input.status->start();
+    }
     input.id = globalRunnerInfos[runner_id]->nextId();
     input.release_inside = need_copy;
     input.num = input_num;
